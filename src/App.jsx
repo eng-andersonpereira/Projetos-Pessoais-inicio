@@ -4,14 +4,9 @@ import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Toolti
 const STORAGE_KEY = "duetto-app-v1";
 
 const BRAND = {
-  primary: "#63d3ac",
-  secondary: "#a78bfa",
-  danger: "#f87171",
-  bg: "#07090f",
-  surface: "rgba(255,255,255,0.04)",
-  border: "rgba(255,255,255,0.08)",
-  text: "#e2e8f0",
-  muted: "#64748b",
+  primary: "#63d3ac", secondary: "#a78bfa", danger: "#f87171",
+  bg: "#07090f", surface: "rgba(255,255,255,0.04)", border: "rgba(255,255,255,0.08)",
+  text: "#e2e8f0", muted: "#64748b",
 };
 
 const defaultData = {
@@ -42,6 +37,18 @@ const CAT_COLORS = {
   Educação: "#818cf8", Outros: "#94a3b8",
 };
 
+// ─── Storage helpers (localStorage) ─────────────────────────────────────────
+function loadData() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : defaultData;
+  } catch { return defaultData; }
+}
+
+function saveData(d) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(d)); } catch { }
+}
+
 // ─── AI Advisor ──────────────────────────────────────────────────────────────
 function AIAdvisor({ transactions, goals }) {
   const [analysis, setAnalysis] = useState("");
@@ -55,8 +62,7 @@ function AIAdvisor({ transactions, goals }) {
   const balance = totalIn - totalOut;
 
   async function runAnalysis() {
-    setLoading(true);
-    setAnalysis("");
+    setLoading(true); setAnalysis("");
     const categorias = Object.entries(
       transactions.filter(t => t.type === "saida").reduce((acc, t) => {
         acc[t.category] = (acc[t.category] || 0) + t.value; return acc;
@@ -68,68 +74,43 @@ function AIAdvisor({ transactions, goals }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
-          messages: [{
-            role: "user",
-            content: `Você é a consultora financeira do app Duetto — um app de finanças para casais brasileiros. Analise os dados abaixo e forneça orientações práticas. Use emojis, seja direto e amigável.
-
-DADOS DO CASAL (Duetto):
-- Entradas: R$ ${totalIn.toLocaleString('pt-BR')}
-- Saídas: R$ ${totalOut.toLocaleString('pt-BR')}
-- Saldo: R$ ${balance.toLocaleString('pt-BR')}
-- Gastos por categoria: ${categorias}
-- Metas: ${goals.map(g => `${g.name} (${Math.round((g.current/g.target)*100)}%)`).join(", ")}
-
-Forneça:
-1. Avaliação do momento financeiro do casal (2-3 linhas)
-2. Os 3 principais pontos de atenção
-3. 3 dicas práticas de investimento para o perfil deles
-4. Uma dica especial para casais que planejam finanças juntos`
-          }],
+          model: "claude-sonnet-4-20250514", max_tokens: 1000,
+          messages: [{ role: "user", content: `Você é a consultora financeira do app Duetto — app de finanças para casais brasileiros. Use emojis, seja direto e amigável.\n\nDADOS DO CASAL:\n- Entradas: R$ ${totalIn.toLocaleString('pt-BR')}\n- Saídas: R$ ${totalOut.toLocaleString('pt-BR')}\n- Saldo: R$ ${balance.toLocaleString('pt-BR')}\n- Gastos: ${categorias}\n- Metas: ${goals.map(g => `${g.name} (${Math.round((g.current / g.target) * 100)}%)`).join(", ")}\n\nForneça:\n1. Avaliação do momento financeiro (2-3 linhas)\n2. Os 3 principais pontos de atenção\n3. 3 dicas práticas de investimento\n4. Uma dica especial para casais` }],
         }),
       });
       const data = await res.json();
       setAnalysis(data.content[0].text);
-    } catch {
-      setAnalysis("❌ Não foi possível conectar. Verifique sua conexão.");
-    }
+    } catch { setAnalysis("❌ Não foi possível conectar. Verifique sua conexão."); }
     setLoading(false);
   }
 
   async function askQuestion() {
     if (!question.trim()) return;
     const newHistory = [...chatHistory, { role: "user", content: question }];
-    setChatHistory(newHistory);
-    setQuestion("");
-    setLoading(true);
+    setChatHistory(newHistory); setQuestion(""); setLoading(true);
     try {
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 600,
-          system: `Você é a consultora financeira do Duetto, app de finanças para casais. O casal tem: Entradas R$${totalIn}, Saídas R$${totalOut}, Saldo R$${balance}. Responda em português, de forma prática, com emojis.`,
+          model: "claude-sonnet-4-20250514", max_tokens: 600,
+          system: `Você é a consultora financeira do Duetto. O casal Anderson e Bruna tem: Entradas R$${totalIn}, Saídas R$${totalOut}, Saldo R$${balance}. Responda em português, de forma prática, com emojis.`,
           messages: newHistory,
         }),
       });
       const data = await res.json();
       setChatHistory([...newHistory, { role: "assistant", content: data.content[0].text }]);
-    } catch {
-      setChatHistory([...newHistory, { role: "assistant", content: "❌ Erro ao conectar. Tente novamente." }]);
-    }
+    } catch { setChatHistory([...newHistory, { role: "assistant", content: "❌ Erro ao conectar. Tente novamente." }]); }
     setLoading(false);
   }
-
-  const btnBase = { padding: "8px 20px", borderRadius: 20, border: "none", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: 13, transition: "all 0.2s" };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ display: "flex", gap: 8 }}>
         {[["analysis", "📊 Análise IA"], ["chat", "💬 Perguntar"]].map(([m, label]) => (
           <button key={m} onClick={() => setMode(m)} style={{
-            ...btnBase,
+            padding: "8px 20px", borderRadius: 20, border: "none", cursor: "pointer",
+            fontFamily: "inherit", fontWeight: 600, fontSize: 13, transition: "all 0.2s",
             background: mode === m ? BRAND.primary : "rgba(255,255,255,0.07)",
             color: mode === m ? "#07090f" : BRAND.muted,
           }}>{label}</button>
@@ -140,17 +121,12 @@ Forneça:
         <div>
           <button onClick={runAnalysis} disabled={loading} style={{
             width: "100%", padding: 14, borderRadius: 12, border: "none",
-            cursor: loading ? "not-allowed" : "pointer",
+            cursor: loading ? "not-allowed" : "pointer", fontFamily: "inherit", fontWeight: 700, fontSize: 15, marginBottom: 16,
             background: loading ? "rgba(99,211,172,0.2)" : `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.secondary})`,
-            color: "#07090f", fontWeight: 700, fontSize: 15, fontFamily: "inherit", marginBottom: 16,
-          }}>
-            {loading ? "🔄 Analisando suas finanças..." : "✨ Analisar com Inteligência Artificial"}
-          </button>
+            color: "#07090f",
+          }}>{loading ? "🔄 Analisando..." : "✨ Analisar com Inteligência Artificial"}</button>
           {analysis && (
-            <div style={{
-              background: "rgba(99,211,172,0.04)", border: "1px solid rgba(99,211,172,0.15)",
-              borderRadius: 12, padding: 20, color: "#cbd5e1", lineHeight: 1.8, fontSize: 14, whiteSpace: "pre-wrap",
-            }}>
+            <div style={{ background: "rgba(99,211,172,0.04)", border: "1px solid rgba(99,211,172,0.15)", borderRadius: 12, padding: 20, color: "#cbd5e1", lineHeight: 1.8, fontSize: 14, whiteSpace: "pre-wrap" }}>
               {analysis}
             </div>
           )}
@@ -178,20 +154,11 @@ Forneça:
             {loading && <div style={{ color: BRAND.muted, fontSize: 13 }}>🔄 Consultora Duetto digitando...</div>}
           </div>
           <div style={{ display: "flex", gap: 8 }}>
-            <input
-              value={question} onChange={e => setQuestion(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && askQuestion()}
+            <input value={question} onChange={e => setQuestion(e.target.value)} onKeyDown={e => e.key === "Enter" && askQuestion()}
               placeholder="Faça uma pergunta financeira..."
-              style={{
-                flex: 1, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)",
-                borderRadius: 10, padding: "10px 14px", color: "#e2e8f0", fontFamily: "inherit", fontSize: 14, outline: "none",
-              }}
+              style={{ flex: 1, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, padding: "10px 14px", color: "#e2e8f0", fontFamily: "inherit", fontSize: 14, outline: "none" }}
             />
-            <button onClick={askQuestion} disabled={loading} style={{
-              padding: "10px 18px", borderRadius: 10, border: "none", cursor: "pointer",
-              background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.secondary})`,
-              color: "#07090f", fontWeight: 700, fontSize: 16,
-            }}>→</button>
+            <button onClick={askQuestion} disabled={loading} style={{ padding: "10px 18px", borderRadius: 10, border: "none", cursor: "pointer", background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.secondary})`, color: "#07090f", fontWeight: 700, fontSize: 16 }}>→</button>
           </div>
         </div>
       )}
@@ -201,7 +168,7 @@ Forneça:
 
 // ─── Main App ─────────────────────────────────────────────────────────────────
 export default function Duetto() {
-  const [data, setData] = useState(null);
+  const [data, setData] = useState(() => loadData());
   const [tab, setTab] = useState("dashboard");
   const [activeUser, setActiveUser] = useState("Anderson");
   const [showForm, setShowForm] = useState(false);
@@ -210,22 +177,7 @@ export default function Duetto() {
   const [form, setForm] = useState({ type: "saida", desc: "", value: "", category: "Alimentação", date: new Date().toISOString().slice(0, 10) });
   const [goalForm, setGoalForm] = useState({ name: "", target: "", current: "", deadline: "", color: "#63d3ac" });
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const r = await window.storage.get(STORAGE_KEY, true);
-        setData(r ? JSON.parse(r.value) : defaultData);
-      } catch { setData(defaultData); }
-    }
-    load();
-    const iv = setInterval(load, 5000);
-    return () => clearInterval(iv);
-  }, []);
-
-  async function save(d) {
-    setData(d);
-    try { await window.storage.set(STORAGE_KEY, JSON.stringify(d), true); } catch { }
-  }
+  function save(d) { setData(d); saveData(d); }
 
   function notify(msg, type = "success") {
     setNotification({ msg, type });
@@ -261,22 +213,13 @@ export default function Duetto() {
     notify("💰 Meta atualizada!");
   }
 
-  if (!data) return (
-    <div style={{ minHeight: "100vh", background: BRAND.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16 }}>
-      <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 40, fontWeight: 700, background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.secondary})`, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Duetto</div>
-      <div style={{ color: BRAND.muted, fontSize: 13 }}>Carregando suas finanças...</div>
-    </div>
-  );
-
   const totalIn = data.transactions.filter(t => t.type === "entrada").reduce((s, t) => s + t.value, 0);
   const totalOut = data.transactions.filter(t => t.type === "saida").reduce((s, t) => s + t.value, 0);
   const balance = totalIn - totalOut;
   const savingsRate = totalIn > 0 ? Math.max(0, Math.round((balance / totalIn) * 100)) : 0;
 
   const byCategory = Object.entries(
-    data.transactions.filter(t => t.type === "saida").reduce((acc, t) => {
-      acc[t.category] = (acc[t.category] || 0) + t.value; return acc;
-    }, {})
+    data.transactions.filter(t => t.type === "saida").reduce((acc, t) => { acc[t.category] = (acc[t.category] || 0) + t.value; return acc; }, {})
   ).map(([name, value]) => ({ name, value, color: CAT_COLORS[name] || "#94a3b8" }));
 
   const byUser = USERS.map(u => ({
@@ -290,51 +233,41 @@ export default function Duetto() {
     data.transactions.forEach(t => {
       const k = t.date.slice(0, 7);
       if (!m[k]) m[k] = { month: k.slice(5) + "/" + k.slice(2, 4), Entradas: 0, Saídas: 0 };
-      if (t.type === "entrada") m[k].Entradas += t.value;
-      else m[k].Saídas += t.value;
+      if (t.type === "entrada") m[k].Entradas += t.value; else m[k].Saídas += t.value;
     });
     return Object.values(m).sort((a, b) => a.month.localeCompare(b.month));
   })();
 
   const sorted = [...data.transactions].sort((a, b) => new Date(b.date) - new Date(a.date));
 
-  // ─── Styles ──────────────────────────────────────────────────────────────
   const css = `
-    @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:wght@300;400;500;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=DM+Sans:wght@300;400;500;600;700&display=swap');
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: ${BRAND.bg}; }
-    ::-webkit-scrollbar { width: 3px; height: 3px; }
-    ::-webkit-scrollbar-thumb { background: rgba(99,211,172,0.25); border-radius: 4px; }
+    body { background: #07090f; }
+    ::-webkit-scrollbar { width: 3px; } ::-webkit-scrollbar-thumb { background: rgba(99,211,172,0.25); border-radius: 4px; }
     input, select { font-family: 'DM Sans', sans-serif; }
     input::placeholder { color: #334155; }
-    input:focus, select:focus { outline: none !important; border-color: rgba(99,211,172,0.4) !important; box-shadow: 0 0 0 3px rgba(99,211,172,0.06); }
+    input:focus, select:focus { outline: none !important; border-color: rgba(99,211,172,0.4) !important; }
     @keyframes fadeUp { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
     @keyframes slideIn { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:translateY(0); } }
     @keyframes glow { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
-    @keyframes shimmer { 0% { background-position: -200% center; } 100% { background-position: 200% center; } }
+    @keyframes shimmer { 0% { background-position:-200% center; } 100% { background-position:200% center; } }
     .duetto-wordmark {
-      font-family: 'Cormorant Garamond', serif;
-      font-weight: 700;
-      font-size: 26px;
-      line-height: 1;
+      font-family: 'Cormorant Garamond', serif; font-weight: 700; font-size: 26px; line-height: 1;
       background: linear-gradient(110deg, #63d3ac 0%, #a78bfa 50%, #63d3ac 100%);
-      background-size: 200% auto;
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      animation: shimmer 5s linear infinite;
-      letter-spacing: -0.3px;
+      background-size: 200% auto; -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text; animation: shimmer 5s linear infinite; letter-spacing: -0.3px;
     }
-    .card { background: ${BRAND.surface}; border: 1px solid ${BRAND.border}; border-radius: 16px; padding: 20px; animation: fadeUp 0.35s ease; }
+    .card { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 20px; animation: fadeUp 0.35s ease; }
     .card-hover:hover { background: rgba(255,255,255,0.06); border-color: rgba(99,211,172,0.15); transition: all 0.2s; }
     .btn-primary { background: linear-gradient(135deg, #63d3ac, #a78bfa); color: #07090f; border: none; font-weight: 700; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: opacity 0.2s; border-radius: 10px; }
     .btn-primary:hover { opacity: 0.9; }
     .btn-ghost { background: rgba(255,255,255,0.05); color: #94a3b8; border: 1px solid rgba(255,255,255,0.08); cursor: pointer; font-family: 'DM Sans', sans-serif; border-radius: 8px; transition: all 0.2s; }
-    .btn-ghost:hover { background: rgba(255,255,255,0.09); color: #e2e8f0; }
   `;
 
   const inputStyle = { background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 10, padding: "10px 14px", color: "#e2e8f0", fontSize: 14, width: "100%", transition: "all 0.2s" };
   const labelStyle = { color: "#475569", fontSize: 11, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 6, display: "block" };
+  const tooltipStyle = { contentStyle: { background: "#0f172a", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, color: "#e2e8f0", fontSize: 12 }, formatter: v => `R$ ${v.toLocaleString("pt-BR")}` };
 
   const tabs = [
     { id: "dashboard", label: "Dashboard", icon: "◈" },
@@ -343,13 +276,10 @@ export default function Duetto() {
     { id: "ai", label: "IA Duetto", icon: "✦" },
   ];
 
-  const tooltipStyle = { contentStyle: { background: "#0f172a", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, color: "#e2e8f0", fontSize: 12 }, formatter: v => `R$ ${v.toLocaleString("pt-BR")}` };
-
   return (
     <div style={{ minHeight: "100vh", background: BRAND.bg, fontFamily: "'DM Sans', sans-serif", color: BRAND.text, paddingBottom: 80 }}>
       <style>{css}</style>
 
-      {/* Notification */}
       {notification && (
         <div style={{
           position: "fixed", top: 20, right: 20, zIndex: 9999,
@@ -360,20 +290,18 @@ export default function Duetto() {
         }}>{notification.msg}</div>
       )}
 
-      {/* ─── Header ─── */}
+      {/* Header */}
       <header style={{
-        background: "rgba(7,9,15,0.85)", backdropFilter: "blur(24px)",
+        background: "rgba(7,9,15,0.9)", backdropFilter: "blur(24px)",
         borderBottom: "1px solid rgba(99,211,172,0.08)",
-        padding: "14px 24px", display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "14px 20px", display: "flex", alignItems: "center", justifyContent: "space-between",
         position: "sticky", top: 0, zIndex: 100,
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          {/* Logo mark: two overlapping circles = "duo" */}
-          <svg width="36" height="36" viewBox="0 0 36 36">
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <svg width="34" height="34" viewBox="0 0 36 36">
             <defs>
               <linearGradient id="lg1" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#63d3ac" />
-                <stop offset="100%" stopColor="#a78bfa" />
+                <stop offset="0%" stopColor="#63d3ac" /><stop offset="100%" stopColor="#a78bfa" />
               </linearGradient>
             </defs>
             <circle cx="13" cy="18" r="9" fill="none" stroke="#63d3ac" strokeWidth="1.5" opacity="0.9" />
@@ -382,168 +310,151 @@ export default function Duetto() {
           </svg>
           <div>
             <div className="duetto-wordmark">Duetto</div>
-            <div style={{ color: "#334155", fontSize: 9.5, letterSpacing: "0.14em", fontWeight: 600, marginTop: 1 }}>FINANÇAS EM HARMONIA</div>
+            <div style={{ color: "#334155", fontSize: 9, letterSpacing: "0.14em", fontWeight: 600 }}>FINANÇAS EM HARMONIA</div>
           </div>
         </div>
-
-        {/* User switcher */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontSize: 11, color: BRAND.muted }}>Logado como</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 10, color: BRAND.muted }}>Logado como</span>
           <div style={{ display: "flex", background: "rgba(255,255,255,0.05)", borderRadius: 22, padding: 3, border: "1px solid rgba(255,255,255,0.07)" }}>
             {USERS.map(u => (
               <button key={u} onClick={() => setActiveUser(u)} style={{
-                padding: "5px 14px", borderRadius: 18, border: "none", cursor: "pointer",
-                fontFamily: "'DM Sans', sans-serif", fontWeight: 600, fontSize: 13,
+                padding: "5px 12px", borderRadius: 18, border: "none", cursor: "pointer",
+                fontFamily: "'DM Sans', sans-serif", fontWeight: 600, fontSize: 12,
                 background: activeUser === u ? `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.secondary})` : "transparent",
-                color: activeUser === u ? "#07090f" : BRAND.muted,
-                transition: "all 0.25s",
+                color: activeUser === u ? "#07090f" : BRAND.muted, transition: "all 0.25s",
               }}>{u}</button>
             ))}
           </div>
         </div>
       </header>
 
-      <div style={{ maxWidth: 860, margin: "0 auto", padding: "24px 16px" }}>
+      <div style={{ maxWidth: 860, margin: "0 auto", padding: "20px 12px" }}>
 
-        {/* ─── Tabs ─── */}
-        <div style={{ display: "flex", gap: 2, marginBottom: 28, background: "rgba(255,255,255,0.03)", borderRadius: 14, padding: 3, border: "1px solid rgba(255,255,255,0.06)" }}>
+        {/* Tabs */}
+        <div style={{ display: "flex", gap: 2, marginBottom: 24, background: "rgba(255,255,255,0.03)", borderRadius: 14, padding: 3, border: "1px solid rgba(255,255,255,0.06)" }}>
           {tabs.map(t => (
             <button key={t.id} onClick={() => setTab(t.id)} style={{
-              flex: 1, padding: "10px 6px", borderRadius: 10, border: "none", cursor: "pointer",
-              fontFamily: "'DM Sans', sans-serif", fontWeight: 600, fontSize: 12,
+              flex: 1, padding: "9px 4px", borderRadius: 10, border: "none", cursor: "pointer",
+              fontFamily: "'DM Sans', sans-serif", fontWeight: 600, fontSize: 11,
               background: tab === t.id ? "rgba(99,211,172,0.12)" : "transparent",
               color: tab === t.id ? BRAND.primary : "#475569",
               borderBottom: tab === t.id ? `2px solid ${BRAND.primary}` : "2px solid transparent",
               transition: "all 0.2s",
-            }}>
-              <span style={{ marginRight: 5, fontSize: 14 }}>{t.icon}</span>{t.label}
-            </button>
+            }}><span style={{ marginRight: 4 }}>{t.icon}</span>{t.label}</button>
           ))}
         </div>
 
-        {/* ════════════════════════════════════════
-            DASHBOARD
-        ════════════════════════════════════════ */}
+        {/* DASHBOARD */}
         {tab === "dashboard" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 16, animation: "fadeUp 0.35s ease" }}>
-
-            {/* KPI Row */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14, animation: "fadeUp 0.35s ease" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10 }}>
               {[
                 { label: "Entradas", value: totalIn, color: BRAND.primary, sign: "+" },
                 { label: "Saídas", value: totalOut, color: BRAND.danger, sign: "-" },
                 { label: "Saldo", value: balance, color: balance >= 0 ? "#34d399" : BRAND.danger, sign: "" },
               ].map((k, i) => (
-                <div key={i} className="card" style={{ borderLeft: `3px solid ${k.color}`, padding: "16px 18px" }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: k.color, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 6 }}>{k.label}</div>
-                  <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 24, fontWeight: 700, color: "#f1f5f9" }}>
+                <div key={i} className="card" style={{ borderLeft: `3px solid ${k.color}`, padding: "14px 16px" }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: k.color, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 4 }}>{k.label}</div>
+                  <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 20, fontWeight: 700, color: "#f1f5f9" }}>
                     {k.sign}R${k.value.toLocaleString("pt-BR")}
                   </div>
                 </div>
               ))}
             </div>
 
-            {/* Monthly Flow */}
             <div className="card">
-              <h3 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, color: "#f1f5f9", marginBottom: 16 }}>Fluxo Mensal</h3>
-              <ResponsiveContainer width="100%" height={200}>
+              <h3 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, color: "#f1f5f9", marginBottom: 14 }}>Fluxo Mensal</h3>
+              <ResponsiveContainer width="100%" height={190}>
                 <BarChart data={monthlyFlow} barGap={4}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
                   <XAxis dataKey="month" tick={{ fill: "#475569", fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fill: "#475569", fontSize: 10 }} axisLine={false} tickLine={false} width={60} tickFormatter={v => `R$${(v/1000).toFixed(0)}k`} />
+                  <YAxis tick={{ fill: "#475569", fontSize: 10 }} axisLine={false} tickLine={false} width={55} tickFormatter={v => `R$${(v / 1000).toFixed(0)}k`} />
                   <Tooltip {...tooltipStyle} />
-                  <Bar dataKey="Entradas" fill={BRAND.primary} radius={[4,4,0,0]} opacity={0.9} />
-                  <Bar dataKey="Saídas" fill={BRAND.danger} radius={[4,4,0,0]} opacity={0.9} />
+                  <Bar dataKey="Entradas" fill={BRAND.primary} radius={[4, 4, 0, 0]} opacity={0.9} />
+                  <Bar dataKey="Saídas" fill={BRAND.danger} radius={[4, 4, 0, 0]} opacity={0.9} />
                   <Legend wrapperStyle={{ color: "#64748b", fontSize: 12, paddingTop: 8 }} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
 
-            {/* Pie + By Person */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <div className="card">
-                <h3 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, color: "#f1f5f9", marginBottom: 14 }}>Gastos por Categoria</h3>
-                <ResponsiveContainer width="100%" height={160}>
+                <h3 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 16, color: "#f1f5f9", marginBottom: 12 }}>Por Categoria</h3>
+                <ResponsiveContainer width="100%" height={150}>
                   <PieChart>
-                    <Pie data={byCategory} cx="50%" cy="50%" outerRadius={65} innerRadius={30} dataKey="value" paddingAngle={2}>
+                    <Pie data={byCategory} cx="50%" cy="50%" outerRadius={60} innerRadius={28} dataKey="value" paddingAngle={2}>
                       {byCategory.map((e, i) => <Cell key={i} fill={e.color} />)}
                     </Pie>
                     <Tooltip {...tooltipStyle} />
                   </PieChart>
                 </ResponsiveContainer>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 6 }}>
                   {byCategory.map((c, i) => (
-                    <span key={i} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, color: "#64748b" }}>
-                      <span style={{ width: 7, height: 7, borderRadius: "50%", background: c.color, display: "inline-block" }} />{c.name}
+                    <span key={i} style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 10, color: "#64748b" }}>
+                      <span style={{ width: 6, height: 6, borderRadius: "50%", background: c.color, display: "inline-block" }} />{c.name}
                     </span>
                   ))}
                 </div>
               </div>
-
               <div className="card">
-                <h3 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, color: "#f1f5f9", marginBottom: 14 }}>Por Pessoa</h3>
-                <ResponsiveContainer width="100%" height={160}>
+                <h3 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 16, color: "#f1f5f9", marginBottom: 12 }}>Por Pessoa</h3>
+                <ResponsiveContainer width="100%" height={150}>
                   <BarChart data={byUser} layout="vertical" barGap={4}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" horizontal={false} />
-                    <XAxis type="number" tick={{ fill: "#475569", fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `R$${(v/1000).toFixed(0)}k`} />
-                    <YAxis type="category" dataKey="name" tick={{ fill: "#94a3b8", fontSize: 12 }} width={42} axisLine={false} tickLine={false} />
+                    <XAxis type="number" tick={{ fill: "#475569", fontSize: 9 }} axisLine={false} tickLine={false} tickFormatter={v => `R$${(v / 1000).toFixed(0)}k`} />
+                    <YAxis type="category" dataKey="name" tick={{ fill: "#94a3b8", fontSize: 11 }} width={55} axisLine={false} tickLine={false} />
                     <Tooltip {...tooltipStyle} />
-                    <Bar dataKey="Entradas" fill={BRAND.primary} radius={[0,4,4,0]} />
-                    <Bar dataKey="Saídas" fill={BRAND.danger} radius={[0,4,4,0]} />
+                    <Bar dataKey="Entradas" fill={BRAND.primary} radius={[0, 4, 4, 0]} />
+                    <Bar dataKey="Saídas" fill={BRAND.danger} radius={[0, 4, 4, 0]} />
                     <Legend wrapperStyle={{ color: "#64748b", fontSize: 11 }} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             </div>
 
-            {/* Goals preview */}
             <div className="card">
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
                 <h3 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, color: "#f1f5f9" }}>Metas do Casal</h3>
-                <span style={{ fontSize: 11, color: BRAND.muted }}>Taxa de poupança: <strong style={{ color: savingsRate >= 20 ? BRAND.primary : "#facc15" }}>{savingsRate}%</strong></span>
+                <span style={{ fontSize: 11, color: BRAND.muted }}>Poupança: <strong style={{ color: savingsRate >= 20 ? BRAND.primary : "#facc15" }}>{savingsRate}%</strong></span>
               </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                {data.goals.map(g => {
-                  const pct = Math.min(100, Math.round((g.current / g.target) * 100));
-                  return (
-                    <div key={g.id}>
-                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                        <span style={{ fontWeight: 500, fontSize: 14 }}>{g.name}</span>
-                        <span style={{ color: g.color, fontWeight: 700, fontSize: 13 }}>{pct}%</span>
-                      </div>
-                      <div style={{ background: "rgba(255,255,255,0.05)", borderRadius: 6, height: 6, overflow: "hidden" }}>
-                        <div style={{ width: `${pct}%`, height: "100%", background: `linear-gradient(90deg, ${g.color}66, ${g.color})`, borderRadius: 6, transition: "width 0.6s ease" }} />
-                      </div>
-                      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
-                        <span style={{ fontSize: 11, color: BRAND.muted }}>R${g.current.toLocaleString("pt-BR")}</span>
-                        <span style={{ fontSize: 11, color: BRAND.muted }}>R${g.target.toLocaleString("pt-BR")}</span>
-                      </div>
+              {data.goals.map(g => {
+                const pct = Math.min(100, Math.round((g.current / g.target) * 100));
+                return (
+                  <div key={g.id} style={{ marginBottom: 16 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
+                      <span style={{ fontWeight: 500, fontSize: 13 }}>{g.name}</span>
+                      <span style={{ color: g.color, fontWeight: 700, fontSize: 12 }}>{pct}%</span>
                     </div>
-                  );
-                })}
-              </div>
+                    <div style={{ background: "rgba(255,255,255,0.05)", borderRadius: 6, height: 6, overflow: "hidden" }}>
+                      <div style={{ width: `${pct}%`, height: "100%", background: `linear-gradient(90deg, ${g.color}66, ${g.color})`, borderRadius: 6, transition: "width 0.6s ease" }} />
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginTop: 3 }}>
+                      <span style={{ fontSize: 10, color: BRAND.muted }}>R${g.current.toLocaleString("pt-BR")}</span>
+                      <span style={{ fontSize: 10, color: BRAND.muted }}>R${g.target.toLocaleString("pt-BR")}</span>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
 
-        {/* ════════════════════════════════════════
-            LANÇAMENTOS
-        ════════════════════════════════════════ */}
+        {/* LANÇAMENTOS */}
         {tab === "transactions" && (
           <div style={{ animation: "fadeUp 0.35s ease" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
               <h2 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 22, color: "#f1f5f9" }}>Lançamentos</h2>
-              <button className="btn-primary" onClick={() => setShowForm(!showForm)} style={{ padding: "10px 20px", fontSize: 13 }}>
-                {showForm ? "✕ Fechar" : "+ Novo Lançamento"}
+              <button className="btn-primary" onClick={() => setShowForm(!showForm)} style={{ padding: "10px 18px", fontSize: 13 }}>
+                {showForm ? "✕ Fechar" : "+ Novo"}
               </button>
             </div>
 
             {showForm && (
-              <div className="card" style={{ marginBottom: 16, borderColor: "rgba(99,211,172,0.2)" }}>
-                <p style={{ fontSize: 12, color: BRAND.muted, marginBottom: 14 }}>
+              <div className="card" style={{ marginBottom: 14, borderColor: "rgba(99,211,172,0.2)" }}>
+                <p style={{ fontSize: 12, color: BRAND.muted, marginBottom: 12 }}>
                   Lançando como <strong style={{ color: BRAND.primary }}>{activeUser}</strong>
                 </p>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
                   <div>
                     <label style={labelStyle}>Tipo</label>
                     <select value={form.type} onChange={e => setForm({ ...form, type: e.target.value })} style={inputStyle}>
@@ -559,7 +470,7 @@ export default function Duetto() {
                   </div>
                   <div>
                     <label style={labelStyle}>Descrição</label>
-                    <input value={form.desc} onChange={e => setForm({ ...form, desc: e.target.value })} placeholder="Ex: Mercado, Salário..." style={inputStyle} />
+                    <input value={form.desc} onChange={e => setForm({ ...form, desc: e.target.value })} placeholder="Ex: Mercado..." style={inputStyle} />
                   </div>
                   <div>
                     <label style={labelStyle}>Valor (R$)</label>
@@ -570,38 +481,32 @@ export default function Duetto() {
                     <input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} style={inputStyle} />
                   </div>
                 </div>
-                <button className="btn-primary" onClick={addTransaction} style={{ padding: "12px 24px", fontSize: 14 }}>
-                  ✓ Salvar Lançamento
-                </button>
+                <button className="btn-primary" onClick={addTransaction} style={{ padding: "12px 24px", fontSize: 14 }}>✓ Salvar</button>
               </div>
             )}
 
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {sorted.map(t => (
                 <div key={t.id} className="card card-hover" style={{
-                  padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between",
+                  padding: "13px 14px", display: "flex", alignItems: "center", justifyContent: "space-between",
                   borderLeft: `3px solid ${t.type === "entrada" ? BRAND.primary : BRAND.danger}`,
                 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <div style={{
-                      width: 36, height: 36, borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16,
-                      background: t.type === "entrada" ? "rgba(99,211,172,0.1)" : "rgba(248,113,113,0.1)",
-                    }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <div style={{ width: 34, height: 34, borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, background: t.type === "entrada" ? "rgba(99,211,172,0.1)" : "rgba(248,113,113,0.1)" }}>
                       {t.type === "entrada" ? "↑" : "↓"}
                     </div>
                     <div>
-                      <div style={{ fontWeight: 500, fontSize: 14 }}>{t.desc}</div>
-                      <div style={{ fontSize: 11, color: BRAND.muted, marginTop: 2 }}>
-                        <span style={{ color: CAT_COLORS[t.category] || "#94a3b8" }}>●</span> {t.category} &nbsp;•&nbsp; {t.date} &nbsp;•&nbsp;
-                        <span style={{ color: BRAND.secondary }}>{t.user}</span>
+                      <div style={{ fontWeight: 500, fontSize: 13 }}>{t.desc}</div>
+                      <div style={{ fontSize: 10, color: BRAND.muted, marginTop: 2 }}>
+                        <span style={{ color: CAT_COLORS[t.category] || "#94a3b8" }}>●</span> {t.category} • {t.date} • <span style={{ color: BRAND.secondary }}>{t.user}</span>
                       </div>
                     </div>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <span style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 17, fontWeight: 700, color: t.type === "entrada" ? BRAND.primary : BRAND.danger }}>
-                      {t.type === "entrada" ? "+" : "−"} R${t.value.toLocaleString("pt-BR")}
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 16, fontWeight: 700, color: t.type === "entrada" ? BRAND.primary : BRAND.danger }}>
+                      {t.type === "entrada" ? "+" : "−"}R${t.value.toLocaleString("pt-BR")}
                     </span>
-                    <button onClick={() => deleteTransaction(t.id)} className="btn-ghost" style={{ width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, padding: 0, color: BRAND.danger, borderColor: "rgba(248,113,113,0.2)" }}>✕</button>
+                    <button onClick={() => deleteTransaction(t.id)} className="btn-ghost" style={{ width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, padding: 0, color: BRAND.danger, borderColor: "rgba(248,113,113,0.2)" }}>✕</button>
                   </div>
                 </div>
               ))}
@@ -609,34 +514,28 @@ export default function Duetto() {
           </div>
         )}
 
-        {/* ════════════════════════════════════════
-            METAS
-        ════════════════════════════════════════ */}
+        {/* METAS */}
         {tab === "goals" && (
           <div style={{ animation: "fadeUp 0.35s ease" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
               <h2 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 22, color: "#f1f5f9" }}>Metas do Casal</h2>
-              <button className="btn-primary" onClick={() => setShowGoalForm(!showGoalForm)} style={{ padding: "10px 20px", fontSize: 13 }}>
+              <button className="btn-primary" onClick={() => setShowGoalForm(!showGoalForm)} style={{ padding: "10px 18px", fontSize: 13 }}>
                 {showGoalForm ? "✕ Fechar" : "+ Nova Meta"}
               </button>
             </div>
 
             {showGoalForm && (
-              <div className="card" style={{ marginBottom: 16, borderColor: "rgba(99,211,172,0.2)" }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
-                  <div><label style={labelStyle}>Nome da Meta</label><input value={goalForm.name} onChange={e => setGoalForm({ ...goalForm, name: e.target.value })} placeholder="Ex: Viagem Europa" style={inputStyle} /></div>
-                  <div><label style={labelStyle}>Valor Alvo (R$)</label><input type="number" value={goalForm.target} onChange={e => setGoalForm({ ...goalForm, target: e.target.value })} placeholder="0" style={inputStyle} /></div>
-                  <div><label style={labelStyle}>Já Guardado (R$)</label><input type="number" value={goalForm.current} onChange={e => setGoalForm({ ...goalForm, current: e.target.value })} placeholder="0" style={inputStyle} /></div>
+              <div className="card" style={{ marginBottom: 14, borderColor: "rgba(99,211,172,0.2)" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
+                  <div><label style={labelStyle}>Nome</label><input value={goalForm.name} onChange={e => setGoalForm({ ...goalForm, name: e.target.value })} placeholder="Ex: Viagem Europa" style={inputStyle} /></div>
+                  <div><label style={labelStyle}>Alvo (R$)</label><input type="number" value={goalForm.target} onChange={e => setGoalForm({ ...goalForm, target: e.target.value })} placeholder="0" style={inputStyle} /></div>
+                  <div><label style={labelStyle}>Já Guardado</label><input type="number" value={goalForm.current} onChange={e => setGoalForm({ ...goalForm, current: e.target.value })} placeholder="0" style={inputStyle} /></div>
                   <div><label style={labelStyle}>Prazo</label><input type="date" value={goalForm.deadline} onChange={e => setGoalForm({ ...goalForm, deadline: e.target.value })} style={inputStyle} /></div>
                   <div>
                     <label style={labelStyle}>Cor</label>
                     <div style={{ display: "flex", gap: 8, marginTop: 2 }}>
                       {["#63d3ac", "#a78bfa", "#f9a54a", "#f472b6", "#60a5fa", "#facc15"].map(c => (
-                        <div key={c} onClick={() => setGoalForm({ ...goalForm, color: c })} style={{
-                          width: 26, height: 26, borderRadius: "50%", background: c, cursor: "pointer",
-                          border: goalForm.color === c ? "3px solid #fff" : "2px solid transparent",
-                          transition: "all 0.2s",
-                        }} />
+                        <div key={c} onClick={() => setGoalForm({ ...goalForm, color: c })} style={{ width: 24, height: 24, borderRadius: "50%", background: c, cursor: "pointer", border: goalForm.color === c ? "3px solid #fff" : "2px solid transparent", transition: "all 0.2s" }} />
                       ))}
                     </div>
                   </div>
@@ -645,39 +544,35 @@ export default function Duetto() {
               </div>
             )}
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               {data.goals.map(g => {
                 const pct = Math.min(100, Math.round((g.current / g.target) * 100));
                 const remaining = g.target - g.current;
                 const daysLeft = g.deadline ? Math.ceil((new Date(g.deadline) - new Date()) / 86400000) : null;
                 return (
                   <div key={g.id} className="card" style={{ borderLeft: `4px solid ${g.color}` }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
                       <div>
-                        <h3 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 20, color: "#f1f5f9" }}>{g.name}</h3>
-                        {daysLeft !== null && (
-                          <span style={{ fontSize: 11, color: daysLeft < 60 ? "#facc15" : BRAND.muted }}>
-                            📅 {g.deadline} &nbsp;•&nbsp; {daysLeft > 0 ? `${daysLeft} dias restantes` : "Prazo encerrado"}
-                          </span>
-                        )}
+                        <h3 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 19, color: "#f1f5f9" }}>{g.name}</h3>
+                        {daysLeft !== null && <span style={{ fontSize: 11, color: daysLeft < 60 ? "#facc15" : BRAND.muted }}>📅 {g.deadline} • {daysLeft > 0 ? `${daysLeft} dias` : "Encerrado"}</span>}
                       </div>
-                      <span style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 28, fontWeight: 700, color: g.color }}>{pct}%</span>
+                      <span style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 26, fontWeight: 700, color: g.color }}>{pct}%</span>
                     </div>
-                    <div style={{ background: "rgba(255,255,255,0.05)", borderRadius: 8, height: 10, overflow: "hidden", marginBottom: 12 }}>
+                    <div style={{ background: "rgba(255,255,255,0.05)", borderRadius: 8, height: 10, overflow: "hidden", marginBottom: 10 }}>
                       <div style={{ width: `${pct}%`, height: "100%", background: `linear-gradient(90deg, ${g.color}55, ${g.color})`, borderRadius: 8, transition: "width 0.6s ease" }} />
                     </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
-                      <span style={{ fontSize: 12, color: BRAND.muted }}>Guardado: <strong style={{ color: g.color }}>R${g.current.toLocaleString("pt-BR")}</strong></span>
-                      <span style={{ fontSize: 12, color: BRAND.muted }}>Falta: <strong style={{ color: "#f1f5f9" }}>R${remaining.toLocaleString("pt-BR")}</strong></span>
-                      <span style={{ fontSize: 12, color: BRAND.muted }}>Meta: <strong>R${g.target.toLocaleString("pt-BR")}</strong></span>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14 }}>
+                      <span style={{ fontSize: 11, color: BRAND.muted }}>Guardado: <strong style={{ color: g.color }}>R${g.current.toLocaleString("pt-BR")}</strong></span>
+                      <span style={{ fontSize: 11, color: BRAND.muted }}>Falta: <strong>R${remaining.toLocaleString("pt-BR")}</strong></span>
+                      <span style={{ fontSize: 11, color: BRAND.muted }}>Meta: <strong>R${g.target.toLocaleString("pt-BR")}</strong></span>
                     </div>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <span style={{ fontSize: 12, color: BRAND.muted, alignSelf: "center", marginRight: 4 }}>Adicionar:</span>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 11, color: BRAND.muted, alignSelf: "center" }}>Adicionar:</span>
                       {[100, 500, 1000, 2000].map(v => (
                         <button key={v} onClick={() => addToGoal(g.id, v)} style={{
-                          padding: "7px 12px", borderRadius: 8, border: `1px solid ${g.color}33`,
+                          padding: "6px 12px", borderRadius: 8, border: `1px solid ${g.color}33`,
                           background: `${g.color}0d`, color: g.color, fontWeight: 600, fontSize: 12,
-                          cursor: "pointer", fontFamily: "'DM Sans', sans-serif", transition: "all 0.2s",
+                          cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
                         }}>+{v < 1000 ? v : "1k"}</button>
                       ))}
                     </div>
@@ -688,58 +583,41 @@ export default function Duetto() {
           </div>
         )}
 
-        {/* ════════════════════════════════════════
-            IA DUETTO
-        ════════════════════════════════════════ */}
+        {/* IA DUETTO */}
         {tab === "ai" && (
           <div style={{ animation: "fadeUp 0.35s ease" }}>
-            {/* AI Hero */}
-            <div style={{
-              background: "linear-gradient(135deg, rgba(99,211,172,0.08) 0%, rgba(167,139,250,0.08) 100%)",
-              border: "1px solid rgba(99,211,172,0.15)", borderRadius: 20, padding: "24px 24px 20px",
-              marginBottom: 16, textAlign: "center",
-            }}>
-              <div style={{ fontSize: 32, marginBottom: 8 }}>✦</div>
-              <h2 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 24, color: "#f1f5f9", marginBottom: 6 }}>
-                Consultora Financeira Duetto
-              </h2>
-              <p style={{ color: BRAND.muted, fontSize: 13, lineHeight: 1.6 }}>
-                Inteligência Artificial treinada para ajudar casais a <br />
-                tomar melhores decisões financeiras juntos
-              </p>
+            <div style={{ background: "linear-gradient(135deg, rgba(99,211,172,0.08), rgba(167,139,250,0.08))", border: "1px solid rgba(99,211,172,0.15)", borderRadius: 20, padding: "22px 20px 18px", marginBottom: 14, textAlign: "center" }}>
+              <div style={{ fontSize: 30, marginBottom: 8 }}>✦</div>
+              <h2 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 22, color: "#f1f5f9", marginBottom: 6 }}>Consultora Financeira Duetto</h2>
+              <p style={{ color: BRAND.muted, fontSize: 13, lineHeight: 1.6 }}>IA especializada em finanças para casais brasileiros</p>
             </div>
-
-            {/* Quick stats */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, marginBottom: 16 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, marginBottom: 14 }}>
               {[
                 { label: "Taxa de Poupança", value: `${savingsRate}%`, color: savingsRate >= 20 ? BRAND.primary : "#facc15" },
                 { label: "Comprometimento", value: `${Math.round((totalOut / totalIn) * 100)}%`, color: (totalOut / totalIn) > 0.8 ? BRAND.danger : BRAND.primary },
                 { label: "Metas Ativas", value: data.goals.length, color: BRAND.secondary },
               ].map((s, i) => (
-                <div key={i} className="card" style={{ textAlign: "center", padding: 14 }}>
-                  <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 26, color: s.color, fontWeight: 700 }}>{s.value}</div>
-                  <div style={{ fontSize: 11, color: BRAND.muted, marginTop: 4 }}>{s.label}</div>
+                <div key={i} className="card" style={{ textAlign: "center", padding: 12 }}>
+                  <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 24, color: s.color, fontWeight: 700 }}>{s.value}</div>
+                  <div style={{ fontSize: 10, color: BRAND.muted, marginTop: 4 }}>{s.label}</div>
                 </div>
               ))}
             </div>
-
-            <div className="card">
-              <AIAdvisor transactions={data.transactions} goals={data.goals} />
-            </div>
+            <div className="card"><AIAdvisor transactions={data.transactions} goals={data.goals} /></div>
           </div>
         )}
       </div>
 
-      {/* ─── Sync badge ─── */}
+      {/* Badge */}
       <div style={{
-        position: "fixed", bottom: 18, right: 18,
-        background: "rgba(7,9,15,0.85)", border: "1px solid rgba(99,211,172,0.18)",
+        position: "fixed", bottom: 16, right: 16,
+        background: "rgba(7,9,15,0.9)", border: "1px solid rgba(99,211,172,0.18)",
         borderRadius: 22, padding: "6px 14px", fontSize: 11, color: BRAND.primary,
         fontFamily: "'DM Sans', sans-serif", display: "flex", alignItems: "center", gap: 7,
         backdropFilter: "blur(12px)", boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
       }}>
         <div style={{ width: 6, height: 6, borderRadius: "50%", background: BRAND.primary, animation: "glow 2.5s infinite" }} />
-        Duetto • Sincronizado • {activeUser}
+        Duetto • {activeUser}
       </div>
     </div>
   );

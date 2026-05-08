@@ -35,7 +35,7 @@ const defaultData = {
 };
 
 const CATEGORIES = ["Salário", "Extra", "Moradia", "Alimentação", "Contas", "Lazer", "Saúde", "Transporte", "Educação", "Outros"];
-const USERS = ["João", "Maria"];
+const USERS = ["Anderson", "Bruna"];
 const CAT_COLORS = {
   Salário: "#63d3ac", Extra: "#a78bfa", Moradia: "#f87171", Alimentação: "#fb923c",
   Contas: "#facc15", Lazer: "#4ade80", Saúde: "#f472b6", Transporte: "#60a5fa",
@@ -203,7 +203,7 @@ Forneça:
 export default function Duetto() {
   const [data, setData] = useState(null);
   const [tab, setTab] = useState("dashboard");
-  const [activeUser, setActiveUser] = useState("João");
+  const [activeUser, setActiveUser] = useState("Anderson");
   const [showForm, setShowForm] = useState(false);
   const [showGoalForm, setShowGoalForm] = useState(false);
   const [notification, setNotification] = useState(null);
